@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tugas Kuliahku</title>
+<style>
+:root{--bg:#f3f5f1;--card:#fff;--ink:#1f2a24;--mute:#6b776f;--line:#dde3dc;--acc:#2f6f5e;--warn:#c0392b;--soon:#b9770e;--done:#8a948d}
+@media (prefers-color-scheme:dark){:root{--bg:#141a17;--card:#1e2622;--ink:#e8eee9;--mute:#98a59c;--line:#2d3732;--acc:#5fb59d;--warn:#ec7063;--soon:#e0a847;--done:#6b776f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,"Times New Roman",serif}
+main{max-width:680px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:2rem;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 20px}
+.prog{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+.bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
+form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+form .full{grid-column:1/-1}
+input,select,button{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+button{cursor:pointer}
+button.primary{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:bold}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.filters{display:flex;gap:8px;margin-bottom:12px}
+.filters select{flex:1}
+.item{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px}
+.item input[type=checkbox]{width:22px;height:22px;margin-top:3px;accent-color:var(--acc);flex:none}
+.body{flex:1;min-width:0}
+.name{font-weight:bold;word-break:break-word}
+.meta{color:var(--mute);font-size:.9rem}
+.item.done .name{text-decoration:line-through;color:var(--done)}
+.late{color:var(--warn)}.soon{color:var(--soon)}
+.row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.row select{padding:6px 8px;font-size:.9rem}
+.del{border:0;background:none;color:var(--mute);padding:4px 8px}
+.empty{text-align:center;color:var(--mute);padding:28px 0}
+.tools{margin-top:24px;display:flex;gap:8px;flex-wrap:wrap}
+.tools button{font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+<h1>Tugas Kuliahku</h1>
+<p class="sub">Catat tugas, centang kalau selesai, dan tandai kalau sudah dikumpulkan.</p>
+
+<div class="prog">
+<div id="ptext">0 dari 0 tugas dikumpulkan</div>
+<div class="bar"><i id="pbar"></i></div>
+</div>
+
+<form id="f">
+<input class="full" id="n" placeholder="Nama tugas, contoh: Makalah Statistika" required>
+<input id="c" placeholder="Mata kuliah">
+<input id="d" type="date" aria-label="Deadline">
+<button class="primary full" type="submit">Tambah tugas</button>
+</form>
+
+<div class="filters">
+<select id="fc"><option value="">Semua mata kuliah</option></select>
+<select id="fs">
+<option value="">Semua status</option>
+<option value="0">Belum mulai</option>
+<option value="1">Dikerjakan</option>
+<option value="2">Selesai</option>
+<option value="3">Sudah dikumpulkan</option>
+</select>
+</div>
+
+<div id="list"></div>
+
+<div class="tools">
+<button id="exp" type="button">Simpan cadangan data</button>
+<button id="imp" type="button">Pulihkan dari cadangan</button>
+<input id="file" type="file" accept=".json" hidden>
+</div>
+</main>
+
+<script>
+var STATUS=["Belum mulai","Dikerjakan","Selesai","Sudah dikumpulkan"];
+var KEY="tugas-kuliah-v1";
+var tasks=[];
+try{tasks=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){tasks=[]}
+var $=function(id){return document.getElementById(id)};
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(tasks))}catch(e){}}
+
+function dl(t){
+  if(!t.d||t.s>=2)return "";
+  var today=new Date();today.setHours(0,0,0,0);
+  var diff=Math.round((new Date(t.d+"T00:00:00")-today)/864e5);
+  if(diff<0)return '<span class="late">Terlambat '+(-diff)+' hari</span>';
+  if(diff===0)return '<span class="soon">Hari ini</span>';
+  if(diff<=3)return '<span class="soon">'+diff+' hari lagi</span>';
+  return diff+' hari lagi';
+}
+function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML}
+
+function render(){
+  var courses=[];
+  tasks.forEach(function(t){if(t.c&&courses.indexOf(t.c)<0)courses.push(t.c)});
+  var cur=$("fc").value;
+  $("fc").innerHTML='<option value="">Semua mata kuliah</option>'+courses.map(function(c){return '<option'+(c===cur?' selected':'')+'>'+esc(c)+'</option>'}).join("");
+
+  var fs=$("fs").value,fc=$("fc").value;
+  var shown=tasks.filter(function(t){return (!fc||t.c===fc)&&(fs===""||String(t.s)===fs)});
+  shown.sort(function(a,b){return (a.s>=2)-(b.s>=2)||(a.d||"9999").localeCompare(b.d||"9999")});
+
+  $("list").innerHTML=shown.length?shown.map(function(t){
+    var opts=STATUS.map(function(s,i){return '<option value="'+i+'"'+(t.s===i?' selected':'')+'>'+s+'</option>'}).join("");
+    var meta=[t.c?esc(t.c):"",t.d?new Date(t.d+"T00:00:00").toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}):"",dl(t)].filter(Boolean).join(" · ");
+    return '<div class="item'+(t.s>=2?' done':'')+'">'+
+      '<input type="checkbox" aria-label="Tandai selesai" data-id="'+t.id+'"'+(t.s>=2?' checked':'')+'>'+
+      '<div class="body"><div class="name">'+esc(t.n)+'</div><div class="meta">'+meta+'</div>'+
+      '<div class="row"><select data-st="'+t.id+'" aria-label="Status">'+opts+'</select></div></div>'+
+      '<button class="del" data-del="'+t.id+'" aria-label="Hapus tugas">Hapus</button></div>';
+  }).join(""):'<div class="empty">Belum ada tugas. Tambahkan tugas pertamamu di atas.</div>';
+
+  var total=tasks.length,sent=tasks.filter(function(t){return t.s===3}).length;
+  var fin=tasks.filter(function(t){return t.s>=2}).length;
+  $("ptext").textContent=sent+" dari "+total+" tugas dikumpulkan ("+fin+" selesai dikerjakan)";
+  $("pbar").style.width=(total?fin/total*100:0)+"%";
+}
+
+$("f").addEventListener("submit",function(e){
+  e.preventDefault();
+  tasks.push({id:Date.now(),n:$("n").value.trim(),c:$("c").value.trim(),d:$("d").value,s:0});
+  $("n").value="";$("d").value="";
+  save();render();$("n").focus();
+});
+
+$("list").addEventListener("change",function(e){
+  var el=e.target,id;
+  if(el.dataset.id){id=+el.dataset.id;tasks.forEach(function(t){if(t.id===id)t.s=el.checked?2:0})}
+  if(el.dataset.st){id=+el.dataset.st;tasks.forEach(function(t){if(t.id===id)t.s=+el.value})}
+  save();render();
+});
+$("list").addEventListener("click",function(e){
+  if(e.target.dataset.del&&confirm("Hapus tugas ini?")){
+    var id=+e.target.dataset.del;
+    tasks=tasks.filter(function(t){return t.id!==id});
+    save();render();
+  }
+});
+$("fc").addEventListener("change",render);
+$("fs").addEventListener("change",render);
+
+$("exp").addEventListener("click",function(){
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(tasks)],{type:"application/json"}));
+  a.download="cadangan-tugas.json";a.click();
+});
+$("imp").addEventListener("click",function(){$("file").click()});
+$("file").addEventListener("change",function(){
+  var f=this.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){
+    try{var d=JSON.parse(r.result);if(Array.isArray(d)){tasks=d;save();render()}else alert("File tidak sesuai.")}
+    catch(e){alert("File cadangan tidak bisa dibaca.")}
+  };
+  r.readAsText(f);
+});
+
+render();
+</script>
+</body>
+</html>
